@@ -6,10 +6,6 @@ import (
 	"time"
 )
 
-var defaultRequestOptions = requestOptions{
-	header: make(http.Header),
-}
-
 type requestOptions struct {
 	header  http.Header
 	request func(req *http.Request) *http.Request

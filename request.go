@@ -168,7 +168,9 @@ func (r *request) fillRequest(req *http.Request, opt ...RequestOption) *http.Req
 		}
 	}
 
-	ro := defaultRequestOptions
+	ro := requestOptions{
+		header: make(http.Header),
+	}
 	for _, o := range opt {
 		o(&ro)
 	}
