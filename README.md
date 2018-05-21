@@ -2,7 +2,7 @@
 
 > A http request library for Go.
 
-[![ReportCard][reportcard-image]][reportcard-url] [![GoDoc][godoc-image]][godoc-url] [![License][license-image]][license-url]
+[![Build][Build-Status-Image]][Build-Status-Url] [![Coverage][Coverage-Image]][Coverage-Url] [![ReportCard][reportcard-image]][reportcard-url] [![GoDoc][godoc-image]][godoc-url] [![License][license-image]][license-url]
 
 ## Get
 
@@ -45,6 +45,10 @@ func main() {
 
     Copyright (c) 2018 Lyric
 
+[Build-Status-Url]: https://travis-ci.org/LyricTian/req
+[Build-Status-Image]: https://travis-ci.org/LyricTian/req.svg?branch=master
+[Coverage-Url]: https://coveralls.io/github/LyricTian/req?branch=master
+[Coverage-Image]: https://coveralls.io/repos/github/LyricTian/req/badge.svg?branch=master
 [reportcard-url]: https://goreportcard.com/report/github.com/LyricTian/req
 [reportcard-image]: https://goreportcard.com/badge/github.com/LyricTian/req
 [godoc-url]: https://godoc.org/github.com/LyricTian/req
