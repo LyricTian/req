@@ -36,6 +36,25 @@ type Responser interface {
 	Response() *http.Response
 }
 
+// RequestURL get request url
+func RequestURL(base, router string) string {
+	var buf bytes.Buffer
+	if l := len(base); l > 0 {
+		if base[l-1] == '/' {
+			base = base[:l-1]
+		}
+		buf.WriteString(base)
+
+		if rl := len(router); rl > 0 {
+			if router[0] != '/' {
+				buf.WriteByte('/')
+			}
+		}
+	}
+	buf.WriteString(router)
+	return buf.String()
+}
+
 // New create a request instance
 func New(opt ...Option) Requester {
 	opts := defaultOptions
@@ -116,23 +135,8 @@ func (r *request) Do(ctx context.Context, urlStr, method string, body io.Reader,
 		ctx = context.Background()
 	}
 
-	var buf bytes.Buffer
-	baseURL := r.opts.baseURL
-	if l := len(baseURL); l > 0 {
-		if baseURL[l-1] == '/' {
-			baseURL = baseURL[:l-1]
-		}
-		buf.WriteString(baseURL)
-
-		if rl := len(urlStr); rl > 0 {
-			if urlStr[0] != '/' {
-				buf.WriteByte('/')
-			}
-		}
-	}
-	buf.WriteString(urlStr)
-
-	req, err := http.NewRequest(method, buf.String(), body)
+	url := RequestURL(r.opts.baseURL, urlStr)
+	req, err := http.NewRequest(method, url, body)
 	if err != nil {
 		return nil, err
 	}
