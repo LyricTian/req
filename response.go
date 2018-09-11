@@ -6,6 +6,16 @@ import (
 	"net/http"
 )
 
+var _ Responser = &response{}
+
+// Responser HTTP response interface
+type Responser interface {
+	String() (string, error)
+	Bytes() ([]byte, error)
+	JSON(v interface{}) error
+	Response() *http.Response
+}
+
 func newResponse(resp *http.Response) *response {
 	return &response{resp}
 }

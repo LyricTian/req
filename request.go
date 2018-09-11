@@ -9,15 +9,9 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
-	"sync"
-
-	"github.com/LyricTian/queue"
 )
 
-var (
-	_ Requester = &request{}
-	_ Responser = &response{}
-)
+var _ Requester = &request{}
 
 // Requester HTTP request interface
 type Requester interface {
@@ -32,14 +26,6 @@ type Requester interface {
 	PutJSON(ctx context.Context, urlStr string, body interface{}, opt ...RequestOption) (Responser, error)
 	PutForm(ctx context.Context, urlStr string, body url.Values, opt ...RequestOption) (Responser, error)
 	Do(ctx context.Context, urlStr, method string, body io.Reader, opt ...RequestOption) (Responser, error)
-}
-
-// Responser HTTP response interface
-type Responser interface {
-	String() (string, error)
-	Bytes() ([]byte, error)
-	JSON(v interface{}) error
-	Response() *http.Response
 }
 
 // RequestURL get request url
@@ -68,36 +54,99 @@ func New(opt ...Option) Requester {
 		o(&opts)
 	}
 
-	cli := &http.Client{
-		Transport:     opts.transport,
-		CheckRedirect: opts.checkRedirect,
-		Jar:           opts.cookieJar,
-		Timeout:       opts.timeout,
-	}
-
 	req := &request{
-		opts:   opts,
-		q:      queue.NewQueue(opts.maxQueue, opts.maxWorker),
-		client: cli,
-		pool: sync.Pool{
-			New: func() interface{} {
-				return &job{
-					tr:  opts.transport,
-					cli: cli,
-				}
-			},
+		opts: opts,
+		cli: &http.Client{
+			Transport:     opts.transport,
+			CheckRedirect: opts.checkRedirect,
+			Jar:           opts.cookieJar,
+			Timeout:       opts.timeout,
 		},
 	}
-	req.q.Run()
 
 	return req
 }
 
 type request struct {
-	opts   options
-	q      *queue.Queue
-	client *http.Client
-	pool   sync.Pool
+	opts options
+	cli  *http.Client
+}
+
+func (r *request) parseQueryParam(urlStr string, param url.Values) string {
+	if param != nil {
+		c := '?'
+		if strings.IndexByte(urlStr, '?') != -1 {
+			c = '&'
+		}
+		urlStr = fmt.Sprintf("%s%c%s", urlStr, c, param.Encode())
+	}
+	return urlStr
+}
+
+func (r *request) setContentType(contentType string, opt ...RequestOption) []RequestOption {
+	var ro []RequestOption
+	ro = append(ro, SetHeader("Content-Type", contentType))
+	if len(opt) > 0 {
+		ro = append(ro, opt...)
+	}
+	return ro
+}
+
+func (r *request) fillRequest(req *http.Request, opts ...RequestOption) (*http.Request, error) {
+	if req.Header == nil {
+		req.Header = make(http.Header)
+	}
+
+	for k := range r.opts.header {
+		req.Header.Set(k, r.opts.header.Get(k))
+	}
+
+	ro := &requestOptions{
+		request: req,
+	}
+	for _, opt := range opts {
+		opt(ro)
+	}
+
+	if fn := ro.handle; fn != nil {
+		return fn(req)
+	}
+
+	return req, nil
+}
+
+func (r *request) doForm(ctx context.Context, urlStr, method string, body url.Values, opt ...RequestOption) (Responser, error) {
+	var s string
+	if body != nil {
+		s = body.Encode()
+	}
+
+	ro := r.setContentType("application/x-www-form-urlencoded", opt...)
+	return r.Do(ctx, urlStr, method, strings.NewReader(s), ro...)
+}
+
+func (r *request) doJSON(ctx context.Context, urlStr, method string, body interface{}, opt ...RequestOption) (Responser, error) {
+	buf := new(bytes.Buffer)
+	err := json.NewEncoder(buf).Encode(body)
+	if err != nil {
+		return nil, err
+	}
+
+	ro := r.setContentType("application/json; charset=UTF-8", opt...)
+	return r.Do(ctx, urlStr, method, buf, ro...)
+}
+
+func (r *request) httpDo(ctx context.Context, req *http.Request, f func(*http.Response, error) error) error {
+	c := make(chan error, 1)
+	go func() { c <- f(r.cli.Do(req)) }()
+	select {
+	case <-ctx.Done():
+		r.opts.transport.CancelRequest(req)
+		<-c
+		return ctx.Err()
+	case err := <-c:
+		return err
+	}
 }
 
 func (r *request) Head(ctx context.Context, urlStr string, queryParam url.Values, opt ...RequestOption) (Responser, error) {
@@ -140,38 +189,6 @@ func (r *request) PutForm(ctx context.Context, urlStr string, body url.Values, o
 	return r.doForm(ctx, urlStr, http.MethodPut, body, opt...)
 }
 
-func (r *request) parseQueryParam(urlStr string, param url.Values) string {
-	if param != nil {
-		c := '?'
-		if strings.IndexByte(urlStr, '?') != -1 {
-			c = '&'
-		}
-		urlStr = fmt.Sprintf("%s%c%s", urlStr, c, param.Encode())
-	}
-	return urlStr
-}
-
-func (r *request) doForm(ctx context.Context, urlStr, method string, body url.Values, opt ...RequestOption) (Responser, error) {
-	var s string
-	if body != nil {
-		s = body.Encode()
-	}
-
-	ro := r.setContentType("application/x-www-form-urlencoded", opt...)
-	return r.Do(ctx, urlStr, method, strings.NewReader(s), ro...)
-}
-
-func (r *request) doJSON(ctx context.Context, urlStr, method string, body interface{}, opt ...RequestOption) (Responser, error) {
-	buf := new(bytes.Buffer)
-	err := json.NewEncoder(buf).Encode(body)
-	if err != nil {
-		return nil, err
-	}
-
-	ro := r.setContentType("application/json; charset=UTF-8", opt...)
-	return r.Do(ctx, urlStr, method, buf, ro...)
-}
-
 func (r *request) Do(ctx context.Context, urlStr, method string, body io.Reader, opt ...RequestOption) (Responser, error) {
 	if ctx == nil {
 		ctx = context.Background()
@@ -182,56 +199,23 @@ func (r *request) Do(ctx context.Context, urlStr, method string, body io.Reader,
 	if err != nil {
 		return nil, err
 	}
-	req = r.fillRequest(req, opt...)
 
-	job := r.pool.Get().(*job)
-	job.Reset(ctx, req)
-	r.q.Push(job)
-
-	result := <-job.Result()
-	if result.err != nil {
-		return nil, result.err
+	req, err = r.fillRequest(req, opt...)
+	if err != nil {
+		return nil, err
 	}
 
-	return newResponse(result.resp), nil
-}
-
-func (r *request) setContentType(contentType string, opt ...RequestOption) []RequestOption {
-	var ro []RequestOption
-	ro = append(ro, SetHeader("Content-Type", contentType))
-	if len(opt) > 0 {
-		ro = append(ro, opt...)
-	}
-	return ro
-}
-
-func (r *request) fillRequest(req *http.Request, opt ...RequestOption) *http.Request {
-	if len(r.opts.header) > 0 {
-		for k, v := range r.opts.header {
-			for _, vv := range v {
-				req.Header.Add(k, vv)
-			}
+	var resp Responser
+	err = r.httpDo(ctx, req, func(res *http.Response, err error) error {
+		if err != nil {
+			return err
 		}
+		resp = newResponse(res)
+		return nil
+	})
+	if err != nil {
+		return nil, err
 	}
 
-	ro := requestOptions{
-		header: make(http.Header),
-	}
-	for _, o := range opt {
-		o(&ro)
-	}
-
-	if len(ro.header) > 0 {
-		for k, v := range ro.header {
-			for _, vv := range v {
-				req.Header.Add(k, vv)
-			}
-		}
-	}
-
-	if fn := ro.request; fn != nil {
-		return fn(req)
-	}
-
-	return req
+	return resp, nil
 }

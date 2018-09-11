@@ -7,8 +7,10 @@ import (
 	"sync"
 )
 
-var internalReq Requester
-var once sync.Once
+var (
+	internalReq Requester
+	once        sync.Once
+)
 
 func req(opt ...Option) Requester {
 	once.Do(func() {

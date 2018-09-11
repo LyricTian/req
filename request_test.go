@@ -114,11 +114,7 @@ func BenchmarkGet(b *testing.B) {
 	}))
 	defer ts.Close()
 
-	r := New(
-		SetMaxQueue(64),
-		SetMaxWorker(8),
-	)
-
+	r := New()
 	b.ResetTimer()
 
 	for i := 0; i < b.N; i++ {
