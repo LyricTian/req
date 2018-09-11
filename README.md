@@ -24,10 +24,10 @@ import (
 
 func main() {
 	req.SetOptions(
-		req.SetBaseURL("http://localhost:8080/api"),
+		req.SetBaseURL("https://jsonplaceholder.typicode.com"),
 	)
 
-	resp, err := req.Get(context.Background(), "/foo", nil)
+	resp, err := req.Get(context.Background(), "/posts/42", nil)
 	if err != nil {
 		panic(err)
 	}
@@ -36,7 +36,19 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
-	fmt.Println(body)
+	fmt.Printf("status:%d,body:\n%s\n", resp.Response().StatusCode, body)
+}
+```
+
+> output:
+
+```
+status:200,body:
+{
+  "userId": 5,
+  "id": 42,
+  "title": "commodi ullam sint et excepturi error explicabo praesentium voluptas",
+  "body": "odio fugit voluptatum ducimus earum autem est incidunt voluptatem\nodit reiciendis aliquam sunt sequi nulla dolorem\nnon facere repellendus voluptates quia\nratione harum vitae ut"
 }
 ```
 
