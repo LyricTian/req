@@ -14,6 +14,7 @@ type Responser interface {
 	Bytes() ([]byte, error)
 	JSON(v interface{}) error
 	Response() *http.Response
+	Close()
 }
 
 func newResponse(resp *http.Response) *response {
@@ -50,4 +51,10 @@ func (r *response) JSON(v interface{}) error {
 	defer r.resp.Body.Close()
 
 	return json.NewDecoder(r.resp.Body).Decode(v)
+}
+
+func (r *response) Close() {
+	if !r.resp.Close {
+		r.resp.Body.Close()
+	}
 }
