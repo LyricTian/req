@@ -10,10 +10,11 @@ var _ Responser = &response{}
 
 // Responser HTTP response interface
 type Responser interface {
+	StatusCode() int
+	Response() *http.Response
 	String() (string, error)
 	Bytes() ([]byte, error)
 	JSON(v interface{}) error
-	Response() *http.Response
 	Close()
 }
 
@@ -23,6 +24,10 @@ func newResponse(resp *http.Response) *response {
 
 type response struct {
 	resp *http.Response
+}
+
+func (r *response) StatusCode() int {
+	return r.resp.StatusCode
 }
 
 func (r *response) Response() *http.Response {
