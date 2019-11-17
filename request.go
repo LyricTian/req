@@ -137,16 +137,7 @@ func (r *request) doJSON(ctx context.Context, urlStr, method string, body interf
 }
 
 func (r *request) httpDo(ctx context.Context, req *http.Request, f func(*http.Response, error) error) error {
-	c := make(chan error, 1)
-	go func() { c <- f(r.cli.Do(req)) }()
-	select {
-	case <-ctx.Done():
-		r.opts.transport.CancelRequest(req)
-		<-c
-		return ctx.Err()
-	case err := <-c:
-		return err
-	}
+	return f(r.cli.Do(req))
 }
 
 func (r *request) Head(ctx context.Context, urlStr string, queryParam url.Values, opts ...RequestOption) (Responser, error) {
@@ -195,7 +186,7 @@ func (r *request) Do(ctx context.Context, urlStr, method string, body io.Reader,
 	}
 
 	url := RequestURL(r.opts.baseURL, urlStr)
-	req, err := http.NewRequest(method, url, body)
+	req, err := http.NewRequestWithContext(ctx, method, url, body)
 	if err != nil {
 		return nil, err
 	}
